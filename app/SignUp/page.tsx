@@ -7,38 +7,105 @@ import AuthBrandPanel from "@/components/AuthBrandPanel";
 import BrandMark from "@/components/BrandMark";
 import { API_URL, getErrorMessage } from "@/lib/api";
 
+type FormData = {
+  username: string;
+  email: string;
+  password: string;
+  dateOfBirth: string;
+  phone: string;
+  address: string;
+  creditCard: string;
+};
+
+type MaskResponse = {
+  original_email?: string;
+  original_date_of_birth?: string;
+  original_phone_number?: string;
+  original_address?: string;
+  original_credit_card?: string;
+  email?: string;
+  date_of_birth?: string;
+  phone_number?: string;
+  address?: string;
+  credit_card?: string;
+};
+
+const EMPTY_FORM: FormData = {
+  username: "",
+  email: "",
+  password: "",
+  dateOfBirth: "",
+  phone: "",
+  address: "",
+  creditCard: "",
+};
+
+const SAMPLE_INFO = "asb@gmail.com 090-123-1234 400/142 1234-1234-1234-1234 16/12/2005";
+
 export default function SignUpPage() {
   const router = useRouter();
   const [step, setStep] = useState<"input" | "review">("input");
 
-  const [formData, setFormData] = useState({
-    username: "",
-    password: "",
-    email: "",
-    phone: "",
-    dateOfBirth: "",
-    address: "",
-    creditCard: ""
-  });
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [personalInfo, setPersonalInfo] = useState("");
 
+  const [plainForm, setPlainForm] = useState<FormData>(EMPTY_FORM);
+  const [maskedForm, setMaskedForm] = useState<FormData>(EMPTY_FORM);
   const [showPlain, setShowPlain] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleInputChange = (field: keyof typeof formData, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const prepareReview = () => {
+  const prepareReview = async () => {
     setError("");
-    const { username, password, email, phone, dateOfBirth, address, creditCard } = formData;
 
-    if (!username.trim() || !password || !email.trim() || !phone.trim() || !dateOfBirth.trim() || !address.trim() || !creditCard.trim()) {
-      setError("Please fill in all fields before continuing.");
+    if (!username.trim() || !password || !personalInfo.trim()) {
+      setError("Please fill in username, password, and your personal details.");
       return;
     }
 
-    setStep("review");
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/mask/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: personalInfo.trim() }),
+      });
+      const data: unknown = await response.json();
+
+      if (!response.ok || !data || typeof data !== "object") {
+        setError(getErrorMessage(data, "Could not process personal details with masking service."));
+        return;
+      }
+
+      const masked = data as MaskResponse;
+
+      setPlainForm({
+        username: username.trim(),
+        password,
+        email: masked.original_email ?? "",
+        phone: masked.original_phone_number ?? "",
+        dateOfBirth: masked.original_date_of_birth ?? "",
+        address: masked.original_address ?? "",
+        creditCard: masked.original_credit_card ?? "",
+      });
+
+      setMaskedForm({
+        username: username.trim(),
+        password: "••••••••",
+        email: masked.email ?? "",
+        phone: masked.phone_number ?? "",
+        dateOfBirth: masked.date_of_birth ?? "",
+        address: masked.address ?? "",
+        creditCard: masked.credit_card ?? "",
+      });
+
+      setStep("review");
+    } catch {
+      setError("The masking service is unavailable. Check your connection and try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const register = async () => {
@@ -49,18 +116,18 @@ export default function SignUpPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          username: formData.username.trim(),
-          password: formData.password,
-          email: formData.email.trim(),
-          tel: formData.phone.trim(),
-          date_of_birth: formData.dateOfBirth.trim(),
-          address: formData.address.trim(),
-          credit_card: formData.creditCard.trim(),
+          username: plainForm.username,
+          password: plainForm.password,
+          email: plainForm.email,
+          tel: plainForm.phone,
+          date_of_birth: plainForm.dateOfBirth,
+          address: plainForm.address,
+          credit_card: plainForm.creditCard,
         }),
       });
       const data: unknown = await response.json();
       if (!response.ok) {
-        setError(getErrorMessage(data, "Account creation failed."));
+        setError(getErrorMessage(data, "Account creation failed. Try again."));
         return;
       }
       router.push("/Login");
@@ -71,18 +138,8 @@ export default function SignUpPage() {
     }
   };
 
-  const maskedData = {
-    username: formData.username,
-    password: "••••••••",
-    email: maskEmail(formData.email),
-    phone: maskPhone(formData.phone),
-    dateOfBirth: maskDob(formData.dateOfBirth),
-    address: maskAddress(formData.address),
-    creditCard: maskCard(formData.creditCard),
-  };
-
-  const displayed = showPlain ? formData : maskedData;
-  const safeDisplayed = showPlain ? { ...formData, password: "••••••••" } : maskedData;
+  const displayed = showPlain ? plainForm : maskedForm;
+  const safeDisplayed = showPlain ? { ...plainForm, password: "••••••••" } : maskedForm;
 
   return (
     <div className="flex min-h-screen">
@@ -101,44 +158,75 @@ export default function SignUpPage() {
             <>
               <p className="eyebrow">Create account</p>
               <h1 className="mt-3 text-[2.6rem] font-bold tracking-[-0.06em] leading-[1.1] text-[#0d1f1c]">
-                Register your <br/>secure identity.
+                Register your <br />secure identity.
               </h1>
               <p className="mt-4 text-[0.9375rem] leading-7 text-[#52716a]">
-                Fill in your details below. Sensitive data will be masked by our active policies before final review.
+                Enter your account credentials and personal details. The backend masking engine will automatically parse and protect sensitive fields.
               </p>
 
               <div className="mt-8 space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <InputField label="Username" value={formData.username} onChange={(v) => handleInputChange("username", v)} placeholder="john_doe" />
-                  <InputField label="Password" type="password" value={formData.password} onChange={(v) => handleInputChange("password", v)} placeholder="••••••••" />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <InputField label="Email Address" type="email" value={formData.email} onChange={(v) => handleInputChange("email", v)} placeholder="john@example.com" />
-                  <InputField label="Phone Number" value={formData.phone} onChange={(v) => handleInputChange("phone", v)} placeholder="081-234-5678" />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <InputField label="Date of Birth" value={formData.dateOfBirth} onChange={(v) => handleInputChange("dateOfBirth", v)} placeholder="DD/MM/YYYY" />
-                  <InputField label="Credit Card" value={formData.creditCard} onChange={(v) => handleInputChange("creditCard", v)} placeholder="1234-5678-9012-3456" />
-                </div>
-
-                <div className="col-span-2">
-                  <label className="mb-2 block text-sm font-semibold text-[#0d1f1c]">Address</label>
-                  <div className="field-shell p-1 shadow-sm h-[6rem]">
-                    <textarea
-                      value={formData.address}
-                      onChange={(e) => handleInputChange("address", e.target.value)}
-                      placeholder="123 Example Street, City, Country"
-                      className="h-full w-full resize-none rounded-xl bg-transparent px-3 py-2 text-[0.9375rem] text-[#0d1f1c] outline-none placeholder:text-[#a0b5af]"
+                {/* 1. Username */}
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-[#0d1f1c]">1. Username</label>
+                  <div className="field-shell">
+                    <input
+                      type="text"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      placeholder="e.g. somchai"
+                      className="h-[3.25rem] w-full bg-transparent px-4 text-[0.9375rem] text-[#0d1f1c] outline-none placeholder:text-[#a0b5af]"
                     />
                   </div>
+                </div>
+
+                {/* 2. Password */}
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-[#0d1f1c]">2. Password</label>
+                  <div className="field-shell">
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="h-[3.25rem] w-full bg-transparent px-4 text-[0.9375rem] text-[#0d1f1c] outline-none placeholder:text-[#a0b5af]"
+                    />
+                  </div>
+                </div>
+
+                {/* 3. Personal Info */}
+                <div>
+                  <div className="mb-2 flex items-baseline justify-between">
+                    <label className="block text-sm font-semibold text-[#0d1f1c]">3. Personal Information</label>
+                    <button
+                      type="button"
+                      onClick={() => setPersonalInfo(SAMPLE_INFO)}
+                      className="text-xs font-semibold text-[#147a60] hover:underline"
+                    >
+                      Use sample format
+                    </button>
+                  </div>
+                  <div className="field-shell p-1.5 shadow-sm">
+                    <textarea
+                      value={personalInfo}
+                      onChange={(e) => setPersonalInfo(e.target.value)}
+                      placeholder="e.g. somchai.d@company.com 093-245-7894 25/12/2549 689 ซอยลาดกระบัง 19 1234-5678-9012-3456"
+                      className="h-[8rem] w-full resize-none rounded-xl bg-transparent px-3 py-2 text-[0.9375rem] leading-relaxed text-[#0d1f1c] outline-none placeholder:text-[#a0b5af]"
+                    />
+                  </div>
+                  <p className="mt-2 text-xs text-[#7a9790]">
+                    Free-form text containing email, phone, DOB, address, and credit card (no prefixes like DOB: or Address: needed).
+                  </p>
                 </div>
               </div>
 
               {error && <Message text={error} />}
-              <button type="button" onClick={prepareReview} className="btn-primary w-full mt-8">
-                Continue to protected review
+              <button
+                type="button"
+                onClick={prepareReview}
+                disabled={loading}
+                className="btn-primary w-full mt-8"
+              >
+                {loading ? "Processing with Mask Engine…" : "Continue to protected review"}
               </button>
               <div className="mt-8 text-center text-[0.9375rem] text-[#52716a]">
                 Already have an account? <Link href="/Login" className="font-semibold text-[#147a60] hover:underline">Sign in</Link>
@@ -158,7 +246,7 @@ export default function SignUpPage() {
                 </span>
               </div>
               <p className="mt-4 text-[0.9375rem] leading-7 text-[#52716a]">
-                Sensitive values are masked by default. Verify the information before creating your account.
+                Sensitive values were parsed and masked via backend Regex engine. Verify before creating your account.
               </p>
 
               <div className="mt-8 flex items-center justify-between rounded-t-2xl border border-b-0 border-[#e0ebe5] bg-[#f5f9f7] px-6 py-4">
@@ -166,7 +254,10 @@ export default function SignUpPage() {
                   <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#e2f5ec] text-[#083a31]">
                     <ShieldIcon />
                   </div>
-                  <div><p className="text-sm font-semibold text-[#0d1f1c]">Privacy preview</p><p className="text-xs text-[#7a9790]">View sensitive fields securely</p></div>
+                  <div>
+                    <p className="text-sm font-semibold text-[#0d1f1c]">Privacy preview</p>
+                    <p className="text-xs text-[#7a9790]">Parsed by Regex masking engine</p>
+                  </div>
                 </div>
                 <button
                   type="button"
@@ -193,7 +284,15 @@ export default function SignUpPage() {
                 <button type="button" onClick={register} disabled={loading} className="btn-primary">
                   {loading ? "Creating…" : "Create account"}
                 </button>
-                <button type="button" onClick={() => { setStep("input"); setShowPlain(false); setError(""); }} className="btn-secondary">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep("input");
+                    setShowPlain(false);
+                    setError("");
+                  }}
+                  className="btn-secondary"
+                >
                   Edit input
                 </button>
               </div>
@@ -201,23 +300,6 @@ export default function SignUpPage() {
           )}
         </section>
       </main>
-    </div>
-  );
-}
-
-function InputField({ label, value, onChange, placeholder, type = "text" }: { label: string, value: string, onChange: (v: string) => void, placeholder?: string, type?: string }) {
-  return (
-    <div>
-      <label className="mb-2 block text-sm font-semibold text-[#0d1f1c]">{label}</label>
-      <div className="field-shell">
-        <input
-          type={type}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          className="h-[3.25rem] w-full bg-transparent px-4 text-[0.9375rem] text-[#0d1f1c] outline-none placeholder:text-[#a0b5af]"
-        />
-      </div>
     </div>
   );
 }
@@ -246,28 +328,4 @@ function ShieldIcon() {
       <path d="m8.9 12 2.1 2.1 4.2-4.2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
-}
-
-// Frontend Masking Helpers
-function maskEmail(value: string) {
-  const [local, domain] = value.split("@");
-  if (!local || !domain) return "••••••";
-  if (local.length <= 2) return `${local[0] ?? "•"}••@${domain}`;
-  return `${local[0]}${"•".repeat(Math.max(1, local.length - 2))}${local.at(-1)}@${domain}`;
-}
-function maskPhone(value: string) {
-  const d = value.replace(/\D/g, "");
-  if (d.length < 4) return "••••";
-  return `XXX-XXX-${d.slice(-4)}`;
-}
-function maskCard(value: string) {
-  const d = value.replace(/\D/g, "");
-  if (d.length < 4) return "••••";
-  return `XXXX-XXXX-XXXX-${d.slice(-4)}`;
-}
-function maskDob(value: string) {
-  return value.replace(/\d/g, "X");
-}
-function maskAddress(value: string) {
-  return value.replace(/^\d+(?:\/\d+)?/, (h) => h.replace(/\d/g, "X"));
 }
