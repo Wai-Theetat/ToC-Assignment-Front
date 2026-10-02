@@ -5,7 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AuthBrandPanel from "@/components/AuthBrandPanel";
 import BrandMark from "@/components/BrandMark";
-import { API_URL, getErrorMessage } from "@/lib/api";
+import { RepoLinksFooter } from "@/components/RepoLinks";
+import { apiFetch, ApiError } from "@/lib/api";
+
+type LoginResult = { user_id: number; username: string };
 
 export default function LoginPage() {
   const router = useRouter();
@@ -24,26 +27,25 @@ export default function LoginPage() {
     }
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/auth/login`, {
+      const result = await apiFetch<LoginResult>("/auth/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: username.trim(), password }),
       });
-      const data: unknown = await response.json();
-      if (!response.ok || !data || typeof data !== "object") {
-        setError(getErrorMessage(data, "We could not sign you in. Try again."));
-        return;
-      }
-      const result = data as { user_id?: number; username?: string };
-      if (typeof result.user_id !== "number" || typeof result.username !== "string") {
+
+      if (typeof result?.user_id !== "number" || typeof result?.username !== "string") {
         setError("The sign-in response was incomplete. Try again.");
         return;
       }
+
       localStorage.setItem("user_id", String(result.user_id));
       localStorage.setItem("username", result.username);
       router.push("/MainMenu");
-    } catch {
-      setError("The secure service is unavailable. Check your connection and try again.");
+    } catch (cause) {
+      setError(
+        cause instanceof ApiError
+          ? cause.message
+          : "The secure service is unavailable. Check your connection and try again.",
+      );
     } finally {
       setLoading(false);
     }
@@ -157,6 +159,7 @@ export default function LoginPage() {
               </svg>
               Authorized users only · all access is logged
             </p>
+            <RepoLinksFooter />
           </div>
         </section>
       </main>

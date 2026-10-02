@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import TransactionItem from "@/components/TransactionItem";
-import { API_URL, getErrorMessage } from "@/lib/api";
+import { apiFetch, ApiError } from "@/lib/api";
 
 type ApiTransaction = {
   credit_card: string;
@@ -27,16 +27,19 @@ export default function TransactionPage() {
 
     void (async () => {
       try {
-        const response = await fetch(`${API_URL}/transactions/${id}/history`);
-        const data: unknown = await response.json();
-        if (!response.ok || !Array.isArray(data)) {
-          setError(getErrorMessage(data, "We could not load transaction activity."));
+        const data = await apiFetch<unknown>(`/transactions/${id}/history`);
+        if (!Array.isArray(data)) {
+          setError("We could not load transaction activity.");
           return;
         }
         const valid = (data as unknown[]).filter(isApiTransaction);
         setTransactions(valid.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
-      } catch {
-        setError("We could not reach the activity service. Try again shortly.");
+      } catch (cause) {
+        setError(
+          cause instanceof ApiError
+            ? cause.message
+            : "We could not reach the activity service. Try again shortly.",
+        );
       } finally {
         setLoading(false);
       }

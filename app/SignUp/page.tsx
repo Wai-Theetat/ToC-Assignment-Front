@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AuthBrandPanel from "@/components/AuthBrandPanel";
 import BrandMark from "@/components/BrandMark";
-import { API_URL, getErrorMessage } from "@/lib/api";
+import { RepoLinksFooter } from "@/components/RepoLinks";
+import { apiFetch, ApiError } from "@/lib/api";
 
 type FormData = {
   username: string;
@@ -17,17 +18,18 @@ type FormData = {
   creditCard: string;
 };
 
+/** Response of POST /mask/ — raw originals plus backend-masked display values. */
 type MaskResponse = {
-  original_email?: string;
-  original_date_of_birth?: string;
-  original_phone_number?: string;
-  original_address?: string;
-  original_credit_card?: string;
-  email?: string;
-  date_of_birth?: string;
-  phone_number?: string;
-  address?: string;
-  credit_card?: string;
+  original_email: string;
+  original_date_of_birth: string;
+  original_phone_number: string;
+  original_address: string;
+  original_credit_card: string;
+  email: string;
+  date_of_birth: string;
+  phone_number: string;
+  address: string;
+  credit_card: string;
 };
 
 const EMPTY_FORM: FormData = {
@@ -66,19 +68,18 @@ export default function SignUpPage() {
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/mask/`, {
+      // The backend parses the free-form text and returns BOTH the masked
+      // display values and the raw originals it extracted. The masked set is
+      // for the preview; the raw set is what actually gets registered.
+      const masked = await apiFetch<MaskResponse>("/mask/", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: personalInfo.trim() }),
       });
-      const data: unknown = await response.json();
 
-      if (!response.ok || !data || typeof data !== "object") {
-        setError(getErrorMessage(data, "Could not process personal details with masking service."));
+      if (!masked || typeof masked !== "object") {
+        setError("Could not process personal details with masking service.");
         return;
       }
-
-      const masked = data as MaskResponse;
 
       setPlainForm({
         username: username.trim(),
@@ -101,8 +102,12 @@ export default function SignUpPage() {
       });
 
       setStep("review");
-    } catch {
-      setError("The masking service is unavailable. Check your connection and try again.");
+    } catch (cause) {
+      setError(
+        cause instanceof ApiError
+          ? cause.message
+          : "The masking service is unavailable. Check your connection and try again.",
+      );
     } finally {
       setLoading(false);
     }
@@ -112,9 +117,8 @@ export default function SignUpPage() {
     setError("");
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/auth/register`, {
+      await apiFetch<{ message: string }>("/auth/register", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           username: plainForm.username,
           password: plainForm.password,
@@ -125,14 +129,11 @@ export default function SignUpPage() {
           credit_card: plainForm.creditCard,
         }),
       });
-      const data: unknown = await response.json();
-      if (!response.ok) {
-        setError(getErrorMessage(data, "Account creation failed. Try again."));
-        return;
-      }
       router.push("/Login");
-    } catch {
-      setError("Service offline. Try again.");
+    } catch (cause) {
+      setError(
+        cause instanceof ApiError ? cause.message : "Service offline. Try again.",
+      );
     } finally {
       setLoading(false);
     }
@@ -230,6 +231,9 @@ export default function SignUpPage() {
               </button>
               <div className="mt-8 text-center text-[0.9375rem] text-[#52716a]">
                 Already have an account? <Link href="/Login" className="font-semibold text-[#147a60] hover:underline">Sign in</Link>
+              </div>
+              <div className="text-center">
+                <RepoLinksFooter />
               </div>
             </>
           ) : (

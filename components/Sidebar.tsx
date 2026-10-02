@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import BrandMark from "@/components/BrandMark";
+import RepoLinks from "@/components/RepoLinks";
 
 const NAV_ITEMS = [
   {
@@ -91,6 +92,12 @@ export default function Sidebar() {
         <div className="flex flex-1 flex-col overflow-y-auto px-3 py-5 gap-6">
           {username && <UserCard username={username} />}
           <NavList pathname={pathname} close={close} />
+          <div className="mt-auto border-t border-[#e0ebe5] pt-5">
+            <p className="mb-2.5 px-1 text-[0.7rem] font-semibold uppercase tracking-wide text-[#a0b5af]">
+              Source code
+            </p>
+            <RepoLinks />
+          </div>
         </div>
         <div className="border-t border-[#e0ebe5] px-3 py-4">
           <SignOut handle={handleSignOut} />
@@ -122,6 +129,12 @@ export default function Sidebar() {
             <div className="flex flex-1 flex-col overflow-y-auto px-3 py-5 gap-6">
               {username && <UserCard username={username} />}
               <NavList pathname={pathname} close={close} />
+              <div className="mt-auto border-t border-[#e0ebe5] pt-5">
+                <p className="mb-2.5 px-1 text-[0.7rem] font-semibold uppercase tracking-wide text-[#a0b5af]">
+                  Source code
+                </p>
+                <RepoLinks />
+              </div>
             </div>
             <div className="border-t border-[#e0ebe5] px-3 py-4">
               <SignOut handle={handleSignOut} />

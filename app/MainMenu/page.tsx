@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
-import { API_URL, getErrorMessage } from "@/lib/api";
+import { apiFetch, ApiError } from "@/lib/api";
 
 const QUICK_AMOUNTS = [100, 500, 1_000, 5_000];
 type BalanceResponse = { username?: string; money?: number };
@@ -23,17 +23,15 @@ export default function MainMenu() {
 
   const loadBalance = async (id: string) => {
     try {
-      const response = await fetch(`${API_URL}/transactions/${id}/balance`);
-      const data: unknown = await response.json();
-      if (!response.ok || !data || typeof data !== "object") {
-        setError(getErrorMessage(data, "We could not load your account balance."));
-        return;
-      }
-      const account = data as BalanceResponse;
+      const account = await apiFetch<BalanceResponse>(`/transactions/${id}/balance`);
       if (typeof account.username === "string") setUsername(account.username);
       if (typeof account.money === "number") setBalance(account.money);
-    } catch {
-      setError("We could not reach the account service. Try again shortly.");
+    } catch (cause) {
+      setError(
+        cause instanceof ApiError
+          ? cause.message
+          : "We could not reach the account service. Try again shortly.",
+      );
     }
   };
 
@@ -78,22 +76,22 @@ export default function MainMenu() {
       const payload: Record<string, string | number> = { amount };
       if (type === "transfer") payload.target_username = transferTarget.trim();
 
-      const response = await fetch(`${API_URL}/transactions/${id}/${type}`, {
+      await apiFetch<{ message: string }>(`/transactions/${id}/${type}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data: unknown = await response.json();
-      if (!response.ok) {
-        setError(getErrorMessage(data, `${type === "transfer" ? "Transfer" : type === "deposit" ? "Deposit" : "Withdrawal"} failed. Try again.`));
-        return;
-      }
+
       if (type === "deposit") setDepositAmount("");
       else if (type === "withdraw") setWithdrawAmount("");
       else { setTransferAmount(""); setTransferTarget(""); }
       await loadBalance(id);
-    } catch {
-      setError("The transaction service is unavailable. Try again shortly.");
+    } catch (cause) {
+      const label = type === "transfer" ? "Transfer" : type === "deposit" ? "Deposit" : "Withdrawal";
+      setError(
+        cause instanceof ApiError
+          ? cause.message
+          : `${label} failed. Try again.`,
+      );
     } finally {
       setSubmitting(null);
     }

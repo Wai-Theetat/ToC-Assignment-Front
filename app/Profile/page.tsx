@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
-import { API_URL, getErrorMessage } from "@/lib/api";
+import { apiFetch, ApiError } from "@/lib/api";
 
 type Profile = {
   username: string;
@@ -14,13 +14,17 @@ type Profile = {
   credit_card: string;
 };
 
-const FIELD_META: { label: string; key: keyof Profile; mask: (v: string) => string; mono?: boolean }[] = [
-  { label: "Username",     key: "username",      mask: (v) => v },
-  { label: "Email",        key: "email",         mask: maskEmail, mono: true },
-  { label: "Phone",        key: "tel",           mask: maskPhone, mono: true },
-  { label: "Date of birth",key: "date_of_birth", mask: maskDob  },
-  { label: "Card",         key: "credit_card",   mask: maskCard, mono: true },
-  { label: "Address",      key: "address",       mask: maskAddress },
+// Every value below already arrives masked from the backend (users.py applies
+// the regex censors server-side). The UI renders exactly what it is given — it
+// must never re-mask, because a second masking pass on an already-masked value
+// corrupts it (e.g. "XX/XX/25XX" would become "XX/XX/XXXX").
+const FIELDS: { label: string; key: keyof Profile; mono?: boolean }[] = [
+  { label: "Username",      key: "username" },
+  { label: "Email",         key: "email",         mono: true },
+  { label: "Phone",         key: "tel",           mono: true },
+  { label: "Date of birth", key: "date_of_birth" },
+  { label: "Card",          key: "credit_card",   mono: true },
+  { label: "Address",       key: "address" },
 ];
 
 export default function ProfilePage() {
@@ -33,15 +37,18 @@ export default function ProfilePage() {
     if (!id) { router.push("/Login"); return; }
     void (async () => {
       try {
-        const response = await fetch(`${API_URL}/users/${id}`);
-        const data: unknown = await response.json();
-        if (!response.ok || !isProfile(data)) {
-          setError(getErrorMessage(data, "We could not load this profile."));
+        const data = await apiFetch<unknown>(`/users/${id}`);
+        if (!isProfile(data)) {
+          setError("We could not load this profile.");
           return;
         }
         setProfile(data);
-      } catch {
-        setError("We could not reach the profile service. Try again shortly.");
+      } catch (cause) {
+        setError(
+          cause instanceof ApiError
+            ? cause.message
+            : "We could not reach the profile service. Try again shortly.",
+        );
       }
     })();
   }, [router]);
@@ -78,13 +85,13 @@ export default function ProfilePage() {
                   <p className="mt-0.5 text-xs text-[#7a9790]">Values display as masked by policy. Cannot be edited here.</p>
                 </div>
                 <dl className="divide-y divide-[#f0f6f3]">
-                  {FIELD_META.map(({ label, key, mask, mono }) => (
+                  {FIELDS.map(({ label, key, mono }) => (
                     <div key={key} className="flex flex-col gap-1.5 px-6 py-5 sm:flex-row sm:items-baseline sm:gap-8">
                       <dt className="w-36 shrink-0 text-xs font-semibold uppercase tracking-wide text-[#7a9790]">
                         {label}
                       </dt>
                       <dd className={`min-w-0 break-all text-sm text-[#0d1f1c] ${mono ? "font-mono" : ""}`}>
-                        {mask(profile[key]) || "—"}
+                        {profile[key] || "—"}
                       </dd>
                     </div>
                   ))}
@@ -131,29 +138,6 @@ function isProfile(value: unknown): value is Profile {
   return [item.username, item.email, item.tel, item.date_of_birth, item.address, item.credit_card].every(
     (f) => typeof f === "string"
   );
-}
-
-function maskEmail(value: string) {
-  const [local, domain] = value.split("@");
-  if (!local || !domain) return "••••••";
-  if (local.length <= 2) return `${local[0] ?? "•"}••@${domain}`;
-  return `${local[0]}${"•".repeat(Math.max(1, local.length - 2))}${local.at(-1)}@${domain}`;
-}
-function maskPhone(value: string) {
-  const d = value.replace(/\D/g, "");
-  if (d.length < 4) return "••••";
-  return `XXX-XXX-${d.slice(-4)}`;
-}
-function maskCard(value: string) {
-  const d = value.replace(/\D/g, "");
-  if (d.length < 4) return "••••";
-  return `XXXX-XXXX-XXXX-${d.slice(-4)}`;
-}
-function maskDob(value: string) {
-  return value.replace(/^DOB:\s*/i, "").replace(/\d/g, "X");
-}
-function maskAddress(value: string) {
-  return value.replace(/^Address:\s*/i, "").replace(/^\d+(?:\/\d+)?/, (h) => h.replace(/\d/g, "X"));
 }
 
 function LoadingProfile() {

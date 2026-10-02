@@ -53,13 +53,7 @@ function SecurityPoint({ label }: { label: string }) {
 
 function DataRibbon() {
   return (
-    <div className="pointer-events-none absolute -right-28 bottom-16 w-[34rem] rotate-[-15deg] opacity-70" aria-hidden="true">
-      <div className="space-y-3 rounded-[2rem] border border-white/15 bg-[#0d4d40]/70 p-7 shadow-2xl backdrop-blur-sm">
-        <DataLine label="Account" raw="1234 •••• 3344" masked="•••• •••• 3344" />
-        <DataLine label="Email" raw="s••••••@example.test" masked="s••••••@example.test" />
-        <DataLine label="Phone" raw="093-•••-7894" masked="XXX-XXX-7894" />
-      </div>
-    </div>
+    <></>
   );
 }
 
